@@ -1,4 +1,4 @@
-const { observe, watch } = require("../");
+const { observe, watch, unwatch } = require("../");
 const assert = require("assert");
 
 describe("luft", () => {
@@ -11,12 +11,21 @@ describe("luft", () => {
         }
       });
 
-      watch(state.settings, obj => {
-        assert.deepEqual(obj, { theme: "dark" });
-        done();
+      let expectedValue;
+      let isDone;
+
+      const uid = watch(state.settings, obj => {
+        assert.deepEqual(obj, { theme: expectedValue });
+        if (isDone) {
+          done();
+        }
       });
 
-      state.settings.theme = "dark";
+      expectedValue = "dark";
+      state.settings.theme = expectedValue;
+      isDone = true;
+      expectedValue = "light";
+      state.settings.theme = expectedValue;
     });
 
     it("calls the observer when a full object is changed", done => {
@@ -27,14 +36,21 @@ describe("luft", () => {
         }
       });
 
-      watch(state.settings, obj => {
-        assert.deepEqual(obj, { theme: "dark" });
-        done();
+      let expectedValue;
+      let isDone;
+
+      const uid = watch(state.settings, obj => {
+        assert.deepEqual(obj, { theme: expectedValue });
+        if (isDone) {
+          done();
+        }
       });
 
-      state.settings = {
-        theme: "dark"
-      };
+      expectedValue = "dark";
+      state.settings = { theme: "dark" };
+      isDone = true;
+      expectedValue = "light";
+      state.settings = { theme: "light" };
     });
   });
 });

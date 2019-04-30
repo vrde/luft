@@ -5,16 +5,16 @@ class Handler {
   }
 
   set(obj, prop, value, receiver) {
+    const newProxy = observe(value, obj);
     const oldProxy = obj[prop];
-    const result = Reflect.set(obj, prop, value, receiver);
+    const result = Reflect.set(obj, prop, newProxy, receiver);
     if (prop.startsWith("__")) {
       return result;
     }
-    value = observe(value, obj);
     this.notify(receiver);
-    if (oldProxy.__handler) {
-      value.__handler = oldProxy.__handler;
-      value.__handler.notify(receiver[prop]);
+    if (oldProxy && oldProxy.__handler) {
+      newProxy.__handler = oldProxy.__handler;
+      newProxy.__handler.notify(receiver[prop]);
     }
     return result;
   }
@@ -64,7 +64,7 @@ function observe(obj, parent = undefined) {
 
 function watch(obj, observer) {
   if (obj.__handler) {
-    obj.__handler.subscribe(observer);
+    return obj.__handler.subscribe(observer);
   } else {
     throw new Error(
       "Cannot watch the target object, " +
@@ -73,9 +73,12 @@ function watch(obj, observer) {
   }
 }
 
-function unwatch(obj) {}
+function unwatch(obj, uid) {
+  obj.__handler.unsubscribe(uid);
+}
 
 module.exports = {
   observe,
-  watch
+  watch,
+  unwatch
 };
