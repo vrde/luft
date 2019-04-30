@@ -41,7 +41,7 @@ describe("luft", () => {
     });
   });
 
-  describe(".unwatch(obj, uid)", () => {
+  describe(".unwatch(uid)", () => {
     it("disables the callback function", () => {
       const state = observe({
         users: {},
@@ -57,7 +57,7 @@ describe("luft", () => {
       state.settings = { theme: "dark" };
       assert.deepEqual(actual, { theme: "dark" });
 
-      unwatch(state.settings, uid);
+      unwatch(uid);
 
       state.settings = { theme: "light" };
       assert.deepEqual(actual, { theme: "dark" });

@@ -1,7 +1,9 @@
+const OBSERVERS_TO_HANDLERS = {};
+let OBSERVERS_UID = 0;
+
 class Handler {
   constructor() {
     this.observers = {};
-    this.uid = 0;
   }
 
   set(obj, prop, value, receiver) {
@@ -20,9 +22,10 @@ class Handler {
   }
 
   subscribe(observer) {
-    this.uid++;
-    this.observers[this.uid] = observer;
-    return this.uid;
+    OBSERVERS_UID++;
+    OBSERVERS_TO_HANDLERS[OBSERVERS_UID] = this;
+    this.observers[OBSERVERS_UID] = observer;
+    return OBSERVERS_UID;
   }
 
   notify(receiver) {
@@ -32,7 +35,9 @@ class Handler {
   }
 
   unsubscribe(uid) {
-    delete this.observers[this.uid];
+    const handler = OBSERVERS_TO_HANDLERS[uid];
+    delete OBSERVERS_TO_HANDLERS[uid];
+    delete handler.observers[uid];
   }
 }
 
@@ -73,8 +78,10 @@ function watch(obj, observer) {
   }
 }
 
-function unwatch(obj, uid) {
-  obj.__handler.unsubscribe(uid);
+function unwatch(uid) {
+  const handler = OBSERVERS_TO_HANDLERS[uid];
+  delete OBSERVERS_TO_HANDLERS[uid];
+  delete handler.observers[uid];
 }
 
 module.exports = {
