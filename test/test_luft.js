@@ -3,7 +3,7 @@ const assert = require("assert");
 
 describe("luft", () => {
   describe(".watch(obj, observer)", () => {
-    it("calls the observer when an attribute on the object is changed", done => {
+    it("calls the observer when an attribute on the object is changed", () => {
       const state = observe({
         users: {},
         settings: {
@@ -11,24 +11,18 @@ describe("luft", () => {
         }
       });
 
-      let expectedValue;
-      let isDone;
+      let actual;
 
-      const uid = watch(state.settings, obj => {
-        assert.deepEqual(obj, { theme: expectedValue });
-        if (isDone) {
-          done();
-        }
-      });
+      const uid = watch(state.settings, obj => (actual = obj));
 
-      expectedValue = "dark";
-      state.settings.theme = expectedValue;
-      isDone = true;
-      expectedValue = "light";
-      state.settings.theme = expectedValue;
+      state.settings.theme = "dark";
+      assert.deepEqual(actual, { theme: "dark" });
+
+      state.settings.theme = "light";
+      assert.deepEqual(actual, { theme: "light" });
     });
 
-    it("calls the observer when a full object is changed", done => {
+    it("calls the observer when a full object is changed", () => {
       const state = observe({
         users: {},
         settings: {
@@ -36,21 +30,37 @@ describe("luft", () => {
         }
       });
 
-      let expectedValue;
-      let isDone;
+      let actual;
 
-      const uid = watch(state.settings, obj => {
-        assert.deepEqual(obj, { theme: expectedValue });
-        if (isDone) {
-          done();
+      const uid = watch(state.settings, obj => (actual = obj));
+
+      state.settings = { theme: "dark" };
+      assert.deepEqual(actual, { theme: "dark" });
+      state.settings = { theme: "light" };
+      assert.deepEqual(actual, { theme: "light" });
+    });
+  });
+
+  describe(".unwatch(obj, uid)", () => {
+    it("disables the callback function", () => {
+      const state = observe({
+        users: {},
+        settings: {
+          theme: null
         }
       });
 
-      expectedValue = "dark";
+      let actual;
+
+      const uid = watch(state.settings, obj => (actual = obj));
+
       state.settings = { theme: "dark" };
-      isDone = true;
-      expectedValue = "light";
+      assert.deepEqual(actual, { theme: "dark" });
+
+      unwatch(state.settings, uid);
+
       state.settings = { theme: "light" };
+      assert.deepEqual(actual, { theme: "dark" });
     });
   });
 });
