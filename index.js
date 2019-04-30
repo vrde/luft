@@ -1,76 +1,81 @@
-import React, { Component } from "react";
-
-function addLog(action, path, obj, receiver, prop, oldValue, newValue) {
-  logState.push({
-    action,
-    path,
-    obj,
-    receiver,
-    prop,
-    oldValue,
-    newValue
-  });
-}
-
 class Handler {
   constructor() {
-    this._observers = [];
+    this.observers = {};
+    this.uid = 0;
   }
+
   set(obj, prop, value, receiver) {
-    let r;
-    const path = [obj.__path, prop].join(".");
-    if (path.startsWith(".__")) {
-      r = Reflect.set(obj, prop, value, receiver);
-    } else {
-      if (!path.startsWith("<log>")) {
-        addLog("set", path, obj, receiver, prop, obj[prop], value);
-        value = observe(value, path);
-      }
-      r = Reflect.set(obj, prop, value, receiver);
-      this._observers.map(observer => observer(obj, prop, value, receiver));
+    const oldProxy = obj[prop];
+    const result = Reflect.set(obj, prop, value, receiver);
+    if (prop.startsWith("__")) {
+      return result;
     }
-    return r;
+    value = observe(value, obj);
+    this.notify(receiver);
+    if (oldProxy.__handler) {
+      value.__handler = oldProxy.__handler;
+      value.__handler.notify(receiver[prop]);
+    }
+    return result;
   }
 
-  observe(observer) {
-    this._observers.push(observer);
+  subscribe(observer) {
+    this.uid++;
+    this.observers[this.uid] = observer;
+    return this.uid;
+  }
+
+  notify(receiver) {
+    Object.keys(this.observers).map(uid => {
+      this.observers[uid](receiver);
+    });
+  }
+
+  unsubscribe(uid) {
+    delete this.observers[this.uid];
   }
 }
 
-export function watch(WrappedComponent) {
-  return class extends Component {
-    componentDidMount() {
-      const keys = Object.keys(this.props);
-      for (let i = 0; i < keys.length; i++) {
-        const key = keys[i];
-        if (this.props[key].__handler) {
-          this.props[key].__handler.observe(() => this.forceUpdate());
-        }
-      }
-    }
-    render() {
-      return <WrappedComponent {...this.props} />;
-    }
-  };
-}
-
-export function observe(obj, path = "<root>") {
-  console.log("observe", obj);
-  if (obj && (obj.constructor === Object || obj.constructor === Array)) {
-    let t = obj.constructor();
-    const keys = Object.keys(obj);
-    for (let i = 0; i < keys.length; i++) {
-      let key = keys[i];
-      t[key] = observe(obj[key], [path, key].join("."));
-    }
-    const handler = new Handler();
-    const proxy = new Proxy(t, handler);
-    proxy.__handler = handler;
-    proxy.__path = path;
-    return proxy;
-  } else {
+function observe(obj, parent = undefined) {
+  if (
+    // Cannot observe null/undefined values
+    obj === null ||
+    obj === undefined ||
+    // Cannot observe already observed objects
+    obj.__handler ||
+    // Cannot observe raw values
+    (obj.constructor !== Object && obj.constructor !== Array)
+  ) {
     return obj;
   }
+
+  let t = obj.constructor();
+  const keys = Object.keys(obj);
+  for (let i = 0; i < keys.length; i++) {
+    let key = keys[i];
+    t[key] = observe(obj[key], obj);
+  }
+  const handler = new Handler();
+  const proxy = new Proxy(t, handler);
+  Object.defineProperty(proxy, "__handler", { value: handler, writable: true });
+  Object.defineProperty(proxy, "__parent", { value: parent, writable: true });
+  return proxy;
 }
 
-export const logState = observe([], "<log>");
+function watch(obj, observer) {
+  if (obj.__handler) {
+    obj.__handler.subscribe(observer);
+  } else {
+    throw new Error(
+      "Cannot watch the target object, " +
+        "it doesn't implement an observable interface"
+    );
+  }
+}
+
+function unwatch(obj) {}
+
+module.exports = {
+  observe,
+  watch
+};
