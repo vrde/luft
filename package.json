@@ -2,9 +2,10 @@
   "name": "luft",
   "version": "0.0.1",
   "description": "Minimalistic state management",
-  "main": "index.js",
+  "main": "lib/index.js",
   "scripts": {
-    "test": "mocha"
+    "test": "mocha",
+    "build": "babel src -d lib"
   },
   "repository": {
     "type": "git",
@@ -17,6 +18,12 @@
   },
   "homepage": "https://github.com/vrde/luft#readme",
   "devDependencies": {
+    "@babel/cli": "^7.4.4",
+    "@babel/core": "^7.4.4",
+    "@babel/preset-env": "^7.4.4",
     "mocha": "^6.1.4"
+  },
+  "dependencies": {
+    "react": "^16.8.6"
   }
 }

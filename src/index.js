@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+
 const OBSERVERS_TO_HANDLERS = {};
 let OBSERVERS_UID = 0;
 
@@ -84,8 +86,13 @@ function unwatch(uid) {
   delete handler.observers[uid];
 }
 
-module.exports = {
-  observe,
-  watch,
-  unwatch
-};
+function useWatch(obj) {
+  const [val, setVal] = useState(obj);
+  useEffect(() => {
+    const uid = { uid: watch(val, val => setVal(val)) };
+    return () => unwatch(uid.uid);
+  });
+  return val;
+}
+
+export { observe, watch, unwatch, useWatch };
