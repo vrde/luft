@@ -1,98 +1,192 @@
 import { useState, useEffect } from "react";
 
-const OBSERVERS_TO_HANDLERS = {};
-let OBSERVERS_UID = 0;
+let REGISTRY_UID = 0;
+let REGISTRY_PATHS = {};
+const ROOT = {};
 
-class Handler {
+class Hub {
   constructor() {
-    this.observers = {};
+    this.callbacks = {};
   }
 
-  set(obj, prop, value, receiver) {
-    const newProxy = observe(value, obj);
-    const oldProxy = obj[prop];
-    const result = Reflect.set(obj, prop, newProxy, receiver);
-    if (prop.startsWith("__")) {
-      return result;
-    }
-    this.notify(receiver);
-    if (oldProxy && oldProxy.__handler) {
-      newProxy.__handler = oldProxy.__handler;
-      newProxy.__handler.notify(receiver[prop]);
-    }
-    return result;
+  emit(path, value) {
+    let parentPath = [...path];
+    parentPath.pop();
+    const parentCallbacks = this.callbacks[parentPath] || {};
+    let callbacks = this.callbacks[path] || {};
+    callbacks = { ...callbacks, ...parentCallbacks };
+    Object.keys(callbacks)
+      .map(key => callbacks[key])
+      .forEach(({ f, paths }) => f(...getValues(paths, ROOT.value)));
   }
 
-  subscribe(observer) {
-    OBSERVERS_UID++;
-    OBSERVERS_TO_HANDLERS[OBSERVERS_UID] = this;
-    this.observers[OBSERVERS_UID] = observer;
-    return OBSERVERS_UID;
-  }
+  subscribe(f, ...paths) {
+    REGISTRY_UID++;
+    REGISTRY_PATHS[REGISTRY_UID] = [];
 
-  notify(receiver) {
-    Object.keys(this.observers).map(uid => {
-      this.observers[uid](receiver);
+    paths.forEach(path => {
+      REGISTRY_PATHS[REGISTRY_UID].push(path);
+      if (!this.callbacks[path]) {
+        this.callbacks[path] = {};
+      }
+      this.callbacks[path][REGISTRY_UID] = { f, paths };
     });
+    return REGISTRY_UID;
   }
 
   unsubscribe(uid) {
-    const handler = OBSERVERS_TO_HANDLERS[uid];
-    delete OBSERVERS_TO_HANDLERS[uid];
-    delete handler.observers[uid];
+    REGISTRY_PATHS[uid].forEach(path => {
+      delete this.callbacks[path][uid];
+    });
   }
 }
 
-function observe(obj, parent = undefined) {
+const HUB = new Hub();
+
+function getPath(obj, prop) {
+  //console.log("getPath", obj && obj.__path, prop);
+  const r =
+    obj && obj.__path ? [...obj.__path, prop] : prop ? [prop] : undefined;
+  //console.log("path", r);
+  return r;
+  // return obj && obj.__path ? [obj.__path, prop].join(".") : prop;
+}
+
+function getValues(paths, obj) {
+  return paths.map(path => getValue(path, obj));
+}
+
+export function getValue(path, obj, fallback) {
+  try {
+    return path.reduce((acc, cur) => acc[cur], obj);
+  } catch (e) {
+    if (e instanceof TypeError) {
+      if (fallback !== undefined) {
+        return fallback;
+      } else {
+        throw e;
+      }
+    }
+  }
+}
+
+export function setValue(obj, path, value) {
+  let cur = obj;
+  for (let i = 0; i < path.length - 1; i++) {
+    cur[path[i]] = cur[path[i]] || {};
+    cur = cur[path[i]];
+  }
+  cur[path[path.length - 1]] = value;
+  return cur;
+}
+
+class Handler {
+  set(obj, prop, value, receiver) {
+    const oldProxy = obj[prop];
+    const newProxy = _emitter(value, obj, prop);
+    const result = Reflect.set(obj, prop, newProxy, receiver);
+    HUB.emit(getPath(obj, prop), newProxy);
+    return result;
+  }
+}
+
+export function emitter(obj, parent = undefined, prop = undefined) {
+  ROOT.value = _emitter(...arguments);
+  refresh(ROOT.value);
+  return ROOT.value;
+}
+function _emitter(obj, parent = undefined, prop = undefined) {
   if (
     // Cannot observe null/undefined values
     obj === null ||
     obj === undefined ||
-    // Cannot observe already observed objects
+    // Don't observe already observed objects
     obj.__handler ||
-    // Cannot observe raw values
+    // Don't observe raw values
     (obj.constructor !== Object && obj.constructor !== Array)
   ) {
     return obj;
   }
 
-  let t = obj.constructor();
-  const keys = Object.keys(obj);
-  for (let i = 0; i < keys.length; i++) {
-    let key = keys[i];
-    t[key] = observe(obj[key], obj);
+  const path = getPath(parent, prop);
+
+  // Don't observe value placeholders
+  if (obj.hasOwnProperty("__type")) {
+    if (obj.__type === "value") {
+      const { f, paths } = obj;
+      HUB.subscribe((...values) => {
+        setValue(ROOT.value, path, f(...values));
+      }, ...paths);
+      return;
+    } else if (obj.__type === "action") {
+      const { f } = obj;
+      return (...args) => f(ROOT.value, ...args);
+    }
   }
+
+  const t = obj.constructor();
   const handler = new Handler();
   const proxy = new Proxy(t, handler);
+
   Object.defineProperty(proxy, "__handler", { value: handler, writable: true });
-  Object.defineProperty(proxy, "__parent", { value: parent, writable: true });
+  Object.defineProperty(proxy, "__path", {
+    value: path,
+    writable: true
+  });
+
+  Object.keys(obj).forEach(key => (t[key] = _emitter(obj[key], obj, key)));
+
   return proxy;
 }
 
-function watch(obj, observer) {
-  if (obj.__handler) {
-    return obj.__handler.subscribe(observer);
-  } else {
-    throw new Error(
-      "Cannot watch the target object, " +
-        "it doesn't implement an observable interface"
-    );
+export function refresh(obj) {
+  if (
+    obj !== null &&
+    obj !== undefined &&
+    (obj.constructor === Object || obj.constructor === Array)
+  ) {
+    Object.keys(obj).forEach(key => {
+      obj[key] = refresh(obj[key]);
+    });
   }
+  return obj;
 }
 
-function unwatch(uid) {
-  const handler = OBSERVERS_TO_HANDLERS[uid];
-  delete OBSERVERS_TO_HANDLERS[uid];
-  delete handler.observers[uid];
+export function $(f, ...paths) {
+  paths = paths.map(path => path.split("."));
+  return {
+    __type: "value",
+    f,
+    paths
+  };
 }
 
-function useWatch(obj) {
-  const [val, setVal] = useState(obj);
+export function action(f) {
+  return {
+    __type: "action",
+    f
+  };
+}
+
+export function subscribe(f, ...paths) {
+  paths = paths.map(path => path.split("."));
+  return HUB.subscribe((...values) => {
+    f(...values);
+  }, ...paths);
+}
+
+export function unsubscribe(uid) {
+  HUB.unsubscribe(uid);
+}
+
+export function useLuft(...paths) {
+  const [val, setVal] = useState([]);
   useEffect(() => {
-    const uid = { uid: watch(val, val => setVal(val)) };
-    return () => unwatch(uid.uid);
+    const uid = subscribe(() => {
+      setVal(arguments);
+    }, ...paths);
+    const mem = { uid };
+    return () => unsubscribe(mem.uid);
   });
-  return val;
+  return getValues(paths.map(path => path.split(".")), ROOT.value);
 }
-
-export { observe, watch, unwatch, useWatch };

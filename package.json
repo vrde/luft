@@ -4,7 +4,8 @@
   "description": "Minimalistic state management",
   "main": "lib/index.js",
   "scripts": {
-    "test": "mocha",
+    "test": "mocha --require=@babel/register",
+    "test:watch": "mocha --require=@babel/register -w",
     "build": "babel src -d lib"
   },
   "repository": {
@@ -21,6 +22,7 @@
     "@babel/cli": "^7.4.4",
     "@babel/core": "^7.4.4",
     "@babel/preset-env": "^7.4.4",
+    "@babel/register": "^7.4.4",
     "mocha": "^6.1.4"
   },
   "dependencies": {
