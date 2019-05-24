@@ -1,18 +1,26 @@
 import assert from "assert";
-import { emitter, $, action, subscribe, getValue, setValue } from "../src";
+import {
+  emitter,
+  $,
+  action,
+  subscribe,
+  getValue,
+  setValue,
+  toPath
+} from "../src";
 
 describe("luft", () => {
   it("getValue", () => {
     assert.equal(
-      getValue(["foo", "bar", "baz"], { foo: { bar: { baz: 666 } } }),
+      getValue({ foo: { bar: { baz: 666 } } }, ["foo", "bar", "baz"]),
       666
     );
     assert.equal(
-      getValue(["foo", "bar", "baz", "nope"], { foo: { bar: { baz: 666 } } }),
+      getValue({ foo: { bar: { baz: 666 } } }, ["foo", "bar", "baz", "nope"]),
       undefined
     );
     assert.equal(
-      getValue(["foo", "bar", "baz", "nope"], {}, "fallback"),
+      getValue({}, ["foo", "bar", "baz", "nope"], "fallback"),
       "fallback"
     );
   });
@@ -87,5 +95,20 @@ describe("luft", () => {
     assert.equal(state.sum, 11);
     assert.equal(state.timesTwo, 22);
     assert.equal(state.x, 1);
+  });
+
+  it("#toPath does its thing", () => {
+    const state = emitter({
+      a: { very: { nested: { mapping: { value: true } } } }
+    });
+
+    assert.deepEqual(toPath(["a", "simple", "path"]), ["a", "simple", "path"]);
+    assert.deepEqual(toPath("a.simple.path"), ["a", "simple", "path"]);
+    assert.deepEqual(toPath(state.a.very.nested.mapping), [
+      "a",
+      "very",
+      "nested",
+      "mapping"
+    ]);
   });
 });

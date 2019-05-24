@@ -17,7 +17,7 @@ class Hub {
     callbacks = { ...callbacks, ...parentCallbacks };
     Object.keys(callbacks)
       .map(key => callbacks[key])
-      .forEach(({ f, paths }) => f(...getValues(paths, ROOT.value)));
+      .forEach(({ f, paths }) => f(...getValues(ROOT.value, paths)));
   }
 
   subscribe(f, ...paths) {
@@ -52,11 +52,24 @@ function getPath(obj, prop) {
   // return obj && obj.__path ? [obj.__path, prop].join(".") : prop;
 }
 
-function getValues(paths, obj) {
-  return paths.map(path => getValue(path, obj));
+export function toPath(whatever) {
+  console.log("topath", whatever);
+  if (whatever.constructor === String) {
+    return whatever.split(".");
+  }
+  if (whatever.__path) {
+    return whatever.__path;
+  }
+  return whatever;
 }
 
-export function getValue(path, obj, fallback) {
+function getValues(obj, paths) {
+  paths = paths.map(toPath);
+  return paths.map(path => getValue(obj, path));
+}
+
+export function getValue(obj, path, fallback) {
+  console.log("getValue", obj, path);
   try {
     return path.reduce((acc, cur) => acc[cur], obj);
   } catch (e) {
@@ -95,6 +108,7 @@ export function emitter(obj, parent = undefined, prop = undefined) {
   refresh(ROOT.value);
   return ROOT.value;
 }
+
 function _emitter(obj, parent = undefined, prop = undefined) {
   if (
     // Cannot observe null/undefined values
@@ -134,7 +148,7 @@ function _emitter(obj, parent = undefined, prop = undefined) {
     writable: true
   });
 
-  Object.keys(obj).forEach(key => (t[key] = _emitter(obj[key], obj, key)));
+  Object.keys(obj).forEach(key => (t[key] = _emitter(obj[key], proxy, key)));
 
   return proxy;
 }
@@ -153,7 +167,7 @@ export function refresh(obj) {
 }
 
 export function $(f, ...paths) {
-  paths = paths.map(path => path.split("."));
+  paths = paths.map(toPath);
   return {
     __type: "value",
     f,
@@ -169,7 +183,7 @@ export function action(f) {
 }
 
 export function subscribe(f, ...paths) {
-  paths = paths.map(path => path.split("."));
+  paths = paths.map(toPath);
   return HUB.subscribe((...values) => {
     f(...values);
   }, ...paths);
@@ -182,11 +196,9 @@ export function unsubscribe(uid) {
 export function useLuft(...paths) {
   const [val, setVal] = useState([]);
   useEffect(() => {
-    const uid = subscribe(() => {
-      setVal(arguments);
-    }, ...paths);
+    const uid = subscribe(() => setVal(arguments), ...paths);
     const mem = { uid };
     return () => unsubscribe(mem.uid);
   });
-  return getValues(paths.map(path => path.split(".")), ROOT.value);
+  return getValues(ROOT.value, paths);
 }
