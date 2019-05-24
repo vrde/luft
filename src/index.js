@@ -53,7 +53,6 @@ function getPath(obj, prop) {
 }
 
 export function toPath(whatever) {
-  console.log("topath", whatever);
   if (whatever.constructor === String) {
     return whatever.split(".");
   }
@@ -69,7 +68,6 @@ function getValues(obj, paths) {
 }
 
 export function getValue(obj, path, fallback) {
-  console.log("getValue", obj, path);
   try {
     return path.reduce((acc, cur) => acc[cur], obj);
   } catch (e) {
@@ -89,7 +87,13 @@ export function setValue(obj, path, value) {
     cur[path[i]] = cur[path[i]] || {};
     cur = cur[path[i]];
   }
-  cur[path[path.length - 1]] = value;
+
+  if (value instanceof Promise) {
+    value.then(v => (cur[path[path.length - 1]] = v));
+  } else {
+    cur[path[path.length - 1]] = value;
+  }
+
   return cur;
 }
 
@@ -128,9 +132,10 @@ function _emitter(obj, parent = undefined, prop = undefined) {
   if (obj.hasOwnProperty("__type")) {
     if (obj.__type === "value") {
       const { f, paths } = obj;
-      HUB.subscribe((...values) => {
-        setValue(ROOT.value, path, f(...values));
-      }, ...paths);
+      HUB.subscribe(
+        (...values) => setValue(ROOT.value, path, f(...values)),
+        ...paths
+      );
       return;
     } else if (obj.__type === "action") {
       const { f } = obj;
