@@ -10,6 +10,7 @@ class Hub {
   }
 
   emit(path, value) {
+    console.log("emit", path.join("."), value);
     let parentPath = [...path];
     parentPath.pop();
     const parentCallbacks = this.callbacks[parentPath] || {};
@@ -102,7 +103,14 @@ class Handler {
     const oldProxy = obj[prop];
     const newProxy = _emitter(value, obj, prop);
     const result = Reflect.set(obj, prop, newProxy, receiver);
-    HUB.emit(getPath(obj, prop), newProxy);
+    const path = getPath(obj, prop);
+
+    while (path.length > 0) {
+      //HUB.emit(path, newProxy);
+      HUB.emit(path, getValue(ROOT.value, path));
+      path.pop();
+    }
+
     return result;
   }
 }
